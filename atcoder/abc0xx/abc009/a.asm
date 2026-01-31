@@ -1,9 +1,8 @@
-; https://atcoder.jp/contests/abc099/tasks/abc099_a
+; https://atcoder.jp/contests/abc009/tasks/abc009_1
 
 section .data
     fmt_in  db "%d", 0
-    fmt_abc db "ABC", 10, 0
-    fmt_abd db "ABD", 10, 0
+    fmt_out db "%d", 10, 0
 
 section .text
     global main
@@ -17,22 +16,15 @@ main:
     xor eax, eax
     call scanf WRT ..plt
 
-    mov eax, dword [rsp]
-    cmp eax, 999
-    jle .print_abc
+    mov eax, [rsp]
+    add eax, 1
+    shr eax, 1
 
-.print_abd:
-    lea rdi, [rel fmt_abd]
-    xor eax, eax
-    call printf WRT ..plt
-    jmp .end
-
-.print_abc:
-    lea rdi, [rel fmt_abc]
+    mov esi, eax
+    lea rdi, [rel fmt_out]
     xor eax, eax
     call printf WRT ..plt
 
-.end:
     add rsp, 24
     xor eax, eax
     ret
