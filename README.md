@@ -82,3 +82,118 @@ gcc -no-pie a.o -o a
 | `[rsp]`       | 64bit 読み書き |
 | `qword [rsp]` | 64bit 明示   |
 | `[rbp-8]`     | ローカル変数     |
+
+```nasm
+section .data                      ; データ領域（定数や文字列を置く場所）
+
+    fmt_in  db "%d %d", 0          ; scanf用フォーマット文字列
+                                   ; db = 1バイトずつ配置
+                                   ; 0 は C文字列の終端（ヌル文字）
+
+    fmt_out db "%f", 10, 0         ; printf用フォーマット
+                                   ; "%f" で double を表示
+                                   ; 10 = 改行 '\n'
+                                   ; 0  = ヌル終端
+
+    hundred dq 100.0               ; dq = 8バイト確保
+                                   ; double は 8バイトなので dq
+                                   ; 100.0 をメモリに保存
+
+section .text                      ; 命令を書く領域
+
+    global main                    ; main を外部公開（エントリーポイント）
+    extern scanf, printf           ; 外部関数を使う宣言
+
+main:
+
+    sub rsp, 24                    ; スタックに24バイト確保
+                                   ; rsp = スタックポインタ
+                                   ; ここに scanf の入力値を保存する
+                                   ;
+                                   ; [rsp]     に1つ目のint
+                                   ; [rsp+4]   に2つ目のint
+                                   ;
+                                   ; ※ 本来は16バイトアラインを意識する必要あり
+
+    ; ------------------------------
+    ; scanf("%d %d", &a, &b)
+    ; ------------------------------
+
+    lea rdi, [rel fmt_in]          ; 第1引数 rdi = フォーマット文字列
+                                   ; lea = アドレスを入れる命令
+
+    lea rsi, [rsp]                 ; 第2引数 rsi = 1つ目の整数の保存先
+                                   ; &a に相当
+
+    lea rdx, [rsp + 4]             ; 第3引数 rdx = 2つ目の整数の保存先
+                                   ; &b に相当
+
+    call scanf WRT ..plt           ; scanf呼び出し
+                                   ; 実行後:
+                                   ; [rsp]     = a
+                                   ; [rsp+4]   = b
+
+    ; ------------------------------
+    ; a * b を計算
+    ; ------------------------------
+
+    mov eax, [rsp]                 ; eax = a
+                                   ; 32bit整数ロード
+
+    imul eax, [rsp + 4]            ; eax = eax * b
+                                   ; 符号付き整数乗算
+                                   ; 結果は eax に入る
+
+    ; ------------------------------
+    ; int → double 変換
+    ; ------------------------------
+
+    cvtsi2sd xmm0, eax             ; Convert Signed Integer to Scalar Double
+                                   ; xmm0 = (double) eax
+                                   ;
+                                   ; printf("%f") は double を要求するので
+                                   ; 必ず double に変換する必要がある
+
+    ; ------------------------------
+    ; 100.0 で割る
+    ; ------------------------------
+
+    movsd xmm1, [rel hundred]      ; xmm1 = 100.0
+                                   ; movsd = double をロード
+
+    divsd xmm0, xmm1               ; xmm0 = xmm0 / xmm1
+                                   ; つまり (a*b)/100.0
+
+    ; ------------------------------
+    ; printf("%f\n", result)
+    ; ------------------------------
+
+    lea rdi, [rel fmt_out]         ; 第1引数 rdi = フォーマット文字列
+
+    mov eax, 1                     ; ★超重要★
+                                   ; printfは可変長関数
+                                   ; System V ABIでは
+                                   ; rax = 使用したxmmレジスタ数
+                                   ;
+                                   ; 今回は xmm0 を使っているので 1
+
+    call printf WRT ..plt          ; printf呼び出し
+                                   ;
+                                   ; この時のレジスタ状態:
+                                   ; rdi  = "%f\n"
+                                   ; xmm0 = 計算結果(double)
+                                   ; rax  = 1
+
+    ; ------------------------------
+    ; return 0
+    ; ------------------------------
+
+    xor eax, eax                   ; mainの戻り値 = 0
+
+    add rsp, 24                    ; スタックを元に戻す
+                                   ; subで減らした分を戻す
+
+    ret                            ; 呼び出し元へ戻る
+
+section .note.GNU-stack            ; 実行不可スタック指定（セキュリティ用）
+```
